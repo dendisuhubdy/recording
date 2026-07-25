@@ -37,6 +37,18 @@ h1 { font-size: 2.6rem; margin: 0 0 .6rem; letter-spacing: -.022em; }
 .download:hover { opacity: .88; }
 .requirement { color: var(--muted); font-size: .9rem; margin-top: .9rem; }
 
+/* The capture is a 2x shot of the real window, so it is served at half its
+   pixel size; width/height on the tag reserve the space before it loads. */
+.shot { margin: 0; }
+.shot img {
+  display: block; width: 100%; height: auto;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 18%);
+}
+.shot figcaption {
+  color: var(--muted); font-size: .9rem; text-align: center; margin-top: .9rem;
+}
+
 section { border-top: 1px solid var(--rule); padding-top: 2.25rem; margin-top: 2.25rem; }
 h2 { font-size: 1.3rem; margin: 0 0 1rem; letter-spacing: -.012em; }
 
