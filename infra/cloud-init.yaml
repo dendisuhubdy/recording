@@ -1,0 +1,44 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - ufw
+  - rsync
+
+write_files:
+  - path: /etc/nginx/sites-available/summly
+    content: |
+      server {
+          listen 80;
+          listen [::]:80;
+          server_name summly.xyz www.summly.xyz;
+          root /var/www/summly;
+          index index.html;
+
+          # Serve the DMG as a download rather than letting the browser guess.
+          location /downloads/ {
+              types { application/x-apple-diskimage dmg; }
+              add_header Content-Disposition "attachment";
+          }
+
+          location / {
+              try_files $uri $uri/ =404;
+          }
+
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      }
+
+runcmd:
+  - rm -f /etc/nginx/sites-enabled/default
+  - ln -sf /etc/nginx/sites-available/summly /etc/nginx/sites-enabled/summly
+  - mkdir -p /var/www/summly/downloads
+  - chown -R www-data:www-data /var/www/summly
+  - ufw allow OpenSSH
+  - ufw allow "Nginx Full"
+  - ufw --force enable
+  - nginx -t && systemctl reload nginx

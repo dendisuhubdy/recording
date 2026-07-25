@@ -1,0 +1,57 @@
+:root {
+  color-scheme: light dark;
+  --fg: #16161a;
+  --muted: #5b5b66;
+  --bg: #fbfbfd;
+  --rule: #e3e3e8;
+  --accent: #d92d20;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #ececf1; --muted: #a0a0ab; --bg: #101014; --rule: #2a2a32; }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 17px/1.65 ui-sans-serif, -apple-system, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+main { max-width: 44rem; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+
+header { text-align: center; padding-bottom: 3rem; }
+.dot {
+  width: 76px; height: 76px; border-radius: 50%;
+  background: var(--accent); margin: 0 auto 1.75rem;
+  box-shadow: 0 6px 28px rgb(217 45 32 / 32%);
+}
+h1 { font-size: 2.6rem; margin: 0 0 .6rem; letter-spacing: -.022em; }
+.tagline { color: var(--muted); font-size: 1.15rem; margin: 0 auto 2rem; max-width: 32rem; }
+
+.download {
+  display: inline-block; background: var(--fg); color: var(--bg);
+  text-decoration: none; font-weight: 600;
+  padding: .8rem 1.9rem; border-radius: 9px;
+}
+.download:hover { opacity: .88; }
+.requirement { color: var(--muted); font-size: .9rem; margin-top: .9rem; }
+
+section { border-top: 1px solid var(--rule); padding-top: 2.25rem; margin-top: 2.25rem; }
+h2 { font-size: 1.3rem; margin: 0 0 1rem; letter-spacing: -.012em; }
+
+table { border-collapse: collapse; width: 100%; margin-bottom: 1.25rem; }
+th, td { text-align: left; vertical-align: top; padding: .7rem 0; border-bottom: 1px solid var(--rule); }
+th { width: 11rem; font-weight: 600; padding-right: 1.25rem; }
+
+.caution { color: var(--muted); font-size: .93rem; border-left: 3px solid var(--accent); padding-left: 1rem; }
+
+footer { border-top: 1px solid var(--rule); margin-top: 3rem; padding-top: 1.5rem; color: var(--muted); font-size: .9rem; text-align: center; }
+a { color: inherit; }
+
+@media (max-width: 540px) {
+  main { padding-top: 2.5rem; }
+  h1 { font-size: 2rem; }
+  th { width: auto; display: block; padding-bottom: .2rem; border: 0; }
+  td { display: block; padding-top: 0; }
+}

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting Recorder — record and summarize meetings on your Mac</title>
+<meta name="description" content="A macOS app with one red button. Records your meeting, transcribes it on-device, and summarizes it with Claude. Open source, GPL-3.0.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="dot" aria-hidden="true"></div>
+    <h1>Meeting Recorder</h1>
+    <p class="tagline">
+      One red button. Records your meeting, transcribes it on your Mac,
+      and summarizes it with Claude.
+    </p>
+    <a class="download" href="/downloads/MeetingRecorder.dmg">
+      Download for macOS
+    </a>
+    <p class="requirement">Requires macOS 26 or later · Free and open source</p>
+  </header>
+
+  <section>
+    <h2>What leaves your computer</h2>
+    <table>
+      <tr>
+        <th>Meeting audio</th>
+        <td>Never leaves your Mac. Transcription runs entirely on-device.</td>
+      </tr>
+      <tr>
+        <th>Transcript text</th>
+        <td>
+          <strong>Sent to the Anthropic API</strong> to generate the summary,
+          using your own API key. A transcript contains everything everyone said.
+        </td>
+      </tr>
+      <tr>
+        <th>Your API key</th>
+        <td>Stored in your macOS Keychain. Nowhere else.</td>
+      </tr>
+    </table>
+    <p>
+      There is no backend, no account, no telemetry. Leave the API key blank and
+      recording and transcription still work — you just won't get summaries.
+    </p>
+    <p class="caution">
+      In many places it is illegal to record a conversation without the consent
+      of everyone in it. This app doesn't check or warn. That part is on you.
+    </p>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <p>
+      Recording writes your microphone and the system audio to two separate
+      files and does no mixing while capture is running — the real-time path
+      stays as simple as possible, because that's the one place a bug costs you
+      the meeting. Mixing, transcription, and summarizing all happen after you
+      press stop, and each can be retried on its own.
+    </p>
+    <p>Your audio is never deleted automatically.</p>
+  </section>
+
+  <footer>
+    <a href="https://github.com/dendisuhubdy/recording">Source</a> ·
+    <a href="https://github.com/dendisuhubdy/recording/blob/main/LICENSE">GPL-3.0</a>
+  </footer>
+</main>
+</body>
+</html>

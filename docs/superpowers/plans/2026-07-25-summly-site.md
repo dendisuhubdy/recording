@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **The DigitalOcean API token is a secret.** It is read from the `DIGITALOCEAN_TOKEN` environment variable. It must never be written to a `.tf` file, a `terraform.tfvars`, a shell history file, or any commit.
+- **The DigitalOcean API token is a secret.** It is read from the `DIGITAL_OCEAN_API_TOKEN_PERSONAL` environment variable. It must never be written to a `.tf` file, a `terraform.tfvars`, a shell history file, or any commit.
 - **`terraform.tfstate` contains secrets and must never be committed.** It is gitignored in Task 1.
 - **Droplet size:** `s-1vcpu-512mb-10gb` (the cheapest tier). This serves static files; anything larger is wasted spend. Revisit only if download traffic actually justifies it.
 - **Region:** `sgp1` (Singapore) — closest to the primary user. Change in one variable if that assumption is wrong.
@@ -22,16 +22,46 @@
 
 ## Prerequisites
 
-These are blocking. Confirm all three before Task 2.
+Verified 2026-07-25 against the live account:
 
-1. **A DigitalOcean API token** with write scope, from
-   <https://cloud.digitalocean.com/account/api/tokens>.
-2. **The `summly.xyz` domain**, with its nameservers pointed at DigitalOcean
-   (`ns1.digitalocean.com`, `ns2.digitalocean.com`, `ns3.digitalocean.com`).
-   Registrar nameserver changes take up to 48 hours to propagate; start this
-   first if it is not already done.
-3. **The SSH key `~/.ssh/id_ed25519_DO.pub` uploaded to DigitalOcean**, under
-   Settings → Security → SSH Keys.
+1. **DigitalOcean API token** — read from `$DIGITAL_OCEAN_API_TOKEN_PERSONAL`.
+   Confirmed working (account active, droplet limit 25). ✅
+2. **`summly.xyz` is registered** at Namecheap. ✅ Its nameservers point at
+   **Cloudflare** (`bill.ns.cloudflare.com`, `rosalie.ns.cloudflare.com`), not
+   DigitalOcean — see the DNS note below. This plan keeps Cloudflare.
+3. **SSH key** — `~/.ssh/id_ed25519_DO.pub` is already uploaded to DigitalOcean
+   under the name **`peptidebay-do`** (verified by matching MD5 fingerprint
+   `cf:0f:93:02:ed:43:91:60:7e:ab:8f:21:1a:c1:b7:8d`). ✅ No upload needed;
+   the Terraform references that name.
+
+### DNS: Cloudflare stays in front
+
+The original draft of this plan created a `digitalocean_domain` and A records.
+That was wrong for this setup: with nameservers at Cloudflare, DigitalOcean DNS
+records are never consulted, so those resources would have appeared to succeed
+while changing nothing.
+
+Keeping Cloudflare is also the better arrangement — free CDN and DDoS protection
+in front of `.dmg` downloads, and no waiting on nameserver propagation. So
+Terraform manages **only** the droplet and firewall; the A record is created in
+Cloudflare.
+
+**TLS sequencing matters.** Let's Encrypt validates over HTTP against the origin,
+so the A record must be **DNS-only (grey cloud)** when the certificate is issued.
+After issuance, switching to **proxied (orange cloud)** with SSL mode
+**Full (strict)** keeps working and adds the CDN. Doing it in the other order
+makes certbot fail against Cloudflare's edge instead of the droplet.
+
+### ⚠️ This is a live, shared account
+
+The account already runs **9 droplets**, including `jenkins-master` and two
+Kubernetes nodes. Consequences for anyone executing this plan:
+
+- **Never run `terraform destroy` without reading the plan output first.** This
+  Terraform state only manages what it creates, but a mistaken `-target` or a
+  state file pointed at the wrong resources is unrecoverable.
+- Name everything `summly-*` so it is obvious which droplet belongs to this plan.
+- Get explicit confirmation from the account owner before `terraform apply`.
 
 ## File Structure
 
@@ -41,7 +71,7 @@ site/
   style.css
   downloads/                 # .dmg goes here, gitignored
 infra/
-  main.tf                    # droplet, firewall, DNS records
+  main.tf                    # droplet + firewall only (DNS lives in Cloudflare)
   variables.tf
   outputs.tf
   cloud-init.yaml            # nginx install + hardening on first boot
@@ -305,9 +335,13 @@ variable "size" {
 }
 
 variable "ssh_key_name" {
-  description = "Name of the SSH key already uploaded to DigitalOcean."
+  description = <<-EOT
+    Name of the SSH key already uploaded to DigitalOcean. Defaults to
+    "peptidebay-do", which is the account's name for the key whose private half
+    is at ~/.ssh/id_ed25519_DO (verified by fingerprint).
+  EOT
   type        = string
-  default     = "id_ed25519_DO"
+  default     = "peptidebay-do"
 }
 
 variable "acme_email" {
@@ -443,25 +477,10 @@ resource "digitalocean_firewall" "web" {
   }
 }
 
-resource "digitalocean_domain" "primary" {
-  name = var.domain
-}
-
-resource "digitalocean_record" "apex" {
-  domain = digitalocean_domain.primary.id
-  type   = "A"
-  name   = "@"
-  value  = digitalocean_droplet.web.ipv4_address
-  ttl    = 300
-}
-
-resource "digitalocean_record" "www" {
-  domain = digitalocean_domain.primary.id
-  type   = "A"
-  name   = "www"
-  value  = digitalocean_droplet.web.ipv4_address
-  ttl    = 300
-}
+// No DNS resources here on purpose. summly.xyz uses Cloudflare nameservers, so
+// DigitalOcean DNS records would never be consulted — creating them would look
+// like it worked while doing nothing. The A record is created in Cloudflare;
+// see the DNS section of this plan.
 ```
 
 Create `infra/outputs.tf`:
@@ -515,14 +534,15 @@ owner's explicit go-ahead before Step 2.
 
 ```bash
 cd infra
-export DIGITALOCEAN_TOKEN="<your token>"   # not stored anywhere
-export TF_VAR_do_token="$DIGITALOCEAN_TOKEN"
+export TF_VAR_do_token="$DIGITAL_OCEAN_API_TOKEN_PERSONAL"
 export TF_VAR_acme_email="<your email>"
 terraform plan
 ```
 
-Expected: `Plan: 5 to add, 0 to change, 0 to destroy` — droplet, firewall,
-domain, and two DNS records. Read it. If it proposes destroying anything, stop.
+Expected: `Plan: 2 to add, 0 to change, 0 to destroy` — the droplet and the
+firewall, nothing else. **Read the output.** If it proposes destroying or
+changing anything, stop immediately: this account runs 9 unrelated droplets and
+Terraform should be touching none of them.
 
 - [ ] **Step 2: Apply**
 
@@ -546,18 +566,34 @@ ssh -i ~/.ssh/id_ed25519_DO -o StrictHostKeyChecking=accept-new root@"$IP" \
 
 Expected: `status: done`. This takes 2–4 minutes on first boot.
 
-- [ ] **Step 4: Confirm DNS resolves to the droplet**
+- [ ] **Step 4: Add the A record in Cloudflare, DNS-only**
+
+In the Cloudflare dashboard for `summly.xyz` → **DNS** → **Add record**:
+
+| Field | Value |
+|---|---|
+| Type | `A` |
+| Name | `@` |
+| IPv4 address | the `droplet_ip` from Step 2 |
+| Proxy status | **DNS only (grey cloud)** — for now |
+| TTL | Auto |
+
+Add a second identical record with Name `www`.
+
+**Grey cloud matters here.** Let's Encrypt validates over HTTP against the
+origin; with the orange cloud on, certbot's challenge hits Cloudflare's edge
+instead of the droplet and fails. Step 7 turns the proxy on afterwards.
+
+Confirm it resolves to the droplet before continuing:
 
 ```bash
 dig +short summly.xyz
 dig +short www.summly.xyz
 ```
 
-Expected: both print the droplet IP. If they print nothing, the registrar
-nameservers are not yet pointed at DigitalOcean — that is prerequisite 2, and
-propagation can take up to 48 hours. **Do not run Step 5 until this resolves**;
-Let's Encrypt validates over HTTP and will fail against a domain that does not
-resolve, and repeated failures hit rate limits.
+Expected: both print the droplet IP. Cloudflare DNS propagates in seconds, not
+hours — if it is still empty after a minute, re-check the record. **Do not run
+Step 5 until this resolves**; repeated Let's Encrypt failures hit rate limits.
 
 - [ ] **Step 5: Issue the TLS certificate**
 
@@ -581,17 +617,29 @@ ssh -i ~/.ssh/id_ed25519_DO root@"$IP" \
 
 Expected: `active`, then `Congratulations, all simulated renewals succeeded`.
 
-- [ ] **Step 7: Verify the server responds**
+- [ ] **Step 7: Turn on the Cloudflare proxy**
+
+Now that a real certificate is on the origin, switch both A records to
+**Proxied (orange cloud)**, and set **SSL/TLS → Overview → Full (strict)**.
+
+Full (strict) verifies the origin certificate, which is exactly what Step 5
+installed. Do not use **Flexible**: it makes Cloudflare talk to the origin over
+plain HTTP while showing visitors a padlock, which is worse than no TLS because
+it looks secure and isn't.
+
+- [ ] **Step 8: Verify the server responds**
 
 ```bash
 curl -sI https://summly.xyz | head -1
 curl -sI http://summly.xyz | head -1
+curl -sI https://summly.xyz | grep -i "^server:"
 ```
 
 Expected: `HTTP/2 404` from HTTPS (nginx is up; no `index.html` deployed yet —
-Task 4 fixes that) and `HTTP/1.1 301` from HTTP, proving the redirect works.
+Task 4 fixes that), `HTTP/1.1 301` from HTTP proving the redirect works, and a
+`server: cloudflare` header confirming the proxy is active.
 
-- [ ] **Step 8: Record the outcome**
+- [ ] **Step 9: Record the outcome**
 
 No commit — nothing changed in the repo. Note the droplet IP where the team can
 find it, and confirm `git status` in `infra/` shows no `terraform.tfstate`.
@@ -700,7 +748,9 @@ git commit -m "feat: add site deploy script"
 - [ ] `certbot renew --dry-run` succeeds on the droplet
 - [ ] The DMG downloads and opens with no Gatekeeper warning
 - [ ] `git status` shows no `terraform.tfstate`, no `*.tfvars`, no `.dmg`
-- [ ] `grep -ri "dop_v1" . --exclude-dir=.git` returns nothing — no DO token committed
+- [ ] `git grep -I "dop_v1_" -- ':!docs/**'` returns nothing — no DO token committed
+      (the trailing underscore and the `docs/**` exclusion keep this from matching
+      its own text here, so a pass actually means something)
 
 ## Teardown
 
