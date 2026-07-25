@@ -24,6 +24,12 @@ and transcription work without it; you just will not get summaries.
 conversation without the consent of the people in it. This app does not check,
 warn, or enforce. That is your responsibility.
 
+## Status
+
+**Pre-release.** The app builds and runs, and the core is covered by tests, but
+there is no signed download yet and end-to-end audio capture has not been
+verified on hardware other than the author's. Build from source for now.
+
 ## Requirements
 
 - macOS 26 or later
@@ -31,11 +37,9 @@ warn, or enforce. That is your responsibility.
 
 ## Install
 
-Download the latest `.dmg` from [summly.xyz](https://summly.xyz), open it, and
-drag Meeting Recorder to Applications.
-
-The app is signed and notarized by Apple, so it opens normally — no
-right-click-Open workaround needed.
+Not yet available as a download. Once a signed, notarized build ships, it will
+be a `.dmg` at [summly.xyz](https://summly.xyz). Until then, see
+[Build from source](#build-from-source).
 
 ## Setup
 
