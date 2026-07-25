@@ -94,7 +94,71 @@ public struct ClaudeSummarizer: Summarizer {
     }
 
     public func summarize(_ transcript: Transcript) async throws -> MeetingSummary {
-        // Implemented in Task 5.
-        throw SummarizerError.malformedResponse("not implemented")
+        let request = try makeRequest(for: transcript)
+        let (bytes, response) = try await session.bytes(for: request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw SummarizerError.malformedResponse("no HTTP response")
+        }
+        switch http.statusCode {
+        case 200:
+            break
+        case 401, 403:
+            throw SummarizerError.unauthorized
+        case 429:
+            let retryAfter =
+                http.value(forHTTPHeaderField: "retry-after")
+                .flatMap(TimeInterval.init)
+            throw SummarizerError.rateLimited(retryAfter: retryAfter)
+        default:
+            throw SummarizerError.httpError(status: http.statusCode)
+        }
+
+        var text = ""
+        var stopReason: String?
+        var refusalCategory: String?
+
+        for try await line in bytes.lines {
+            guard line.hasPrefix("data: ") else { continue }
+            let payload = String(line.dropFirst("data: ".count))
+            guard payload != "[DONE]",
+                let data = payload.data(using: .utf8),
+                let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { continue }
+
+            switch event["type"] as? String {
+            case "content_block_delta":
+                if let delta = event["delta"] as? [String: Any],
+                    delta["type"] as? String == "text_delta",
+                    let chunk = delta["text"] as? String
+                {
+                    text += chunk
+                }
+            case "message_delta":
+                if let delta = event["delta"] as? [String: Any] {
+                    stopReason = delta["stop_reason"] as? String
+                    if let details = delta["stop_details"] as? [String: Any] {
+                        refusalCategory = details["category"] as? String
+                    }
+                }
+            default:
+                continue
+            }
+        }
+
+        // Check the refusal before parsing — on a refusal there is no JSON to parse,
+        // and reporting a parse failure would hide the real reason.
+        if stopReason == "refusal" {
+            throw SummarizerError.refused(category: refusalCategory)
+        }
+
+        guard let data = text.data(using: .utf8) else {
+            throw SummarizerError.malformedResponse(text)
+        }
+        do {
+            return try JSONDecoder().decode(MeetingSummary.self, from: data)
+        } catch {
+            throw SummarizerError.malformedResponse(text)
+        }
     }
 }
