@@ -4,7 +4,7 @@
 # Requires SSH access to the droplet. The droplet accepts the key DigitalOcean
 # calls "peptidebay-do", whose private half is ~/.ssh/id_ed25519_DO and is
 # passphrase-protected — load it once with:
-#     ssh-add ~/.ssh/id_ed25519_DO
+#     ssh-add --apple-use-keychain ~/.ssh/id_ed25519_DO
 set -euo pipefail
 
 SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_DO}"
@@ -42,4 +42,4 @@ fi
 
 ssh "${SSH_OPTS[@]}" "root@$IP" "chown -R www-data:www-data $REMOTE_ROOT"
 
-echo "==> Done. http://$IP/ should now serve the landing page."
+echo "==> Live: https://summly.xyz"
