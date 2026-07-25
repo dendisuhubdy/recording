@@ -664,7 +664,16 @@ public struct MeetingStore: Sendable {
     public func write(_ metadata: MeetingMetadata) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
+        // Date encoding is deliberately left at the default (.deferredToDate),
+        // which writes `timeIntervalSinceReferenceDate` — Date's own internal
+        // representation — so a write/read round-trip is bit-exact.
+        //
+        // Every "nicer" option loses precision and makes stored dates mutate on
+        // round-trip: .iso8601 truncates sub-second entirely, an ISO string with
+        // fractional seconds gets only milliseconds, and .secondsSince1970 shifts
+        // the epoch by 978307200.0 in both directions, losing low-order bits.
+        // meta.json is primarily a machine-recovery record; an exact number beats
+        // a lossy timestamp.
         try FileManager.default.createDirectory(
             at: folder(for: metadata.id), withIntermediateDirectories: true)
         try encoder.encode(metadata).write(to: metadataURL(for: metadata.id), options: .atomic)
@@ -672,7 +681,6 @@ public struct MeetingStore: Sendable {
 
     public func read(id: UUID) throws -> MeetingMetadata {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(
             MeetingMetadata.self, from: Data(contentsOf: metadataURL(for: id)))
     }
