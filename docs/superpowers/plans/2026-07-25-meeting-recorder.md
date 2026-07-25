@@ -238,10 +238,15 @@ Replace `<owner>` with the actual GitHub owner before committing.
 
 ```bash
 git status --short
-grep -ri "sk-ant" . --exclude-dir=.git || echo "clean"
+git grep -I "sk-ant-api" -- ':!docs/**' || echo "clean"
 ```
 
 Expected: only `.gitignore`, `LICENSE`, and `README.md` are new; the grep prints `clean`.
+
+The pattern is `sk-ant-api` (the real key prefix), not `sk-ant` — and `docs/**`
+is excluded — so the check does not match its own text in this plan, or the
+`sk-test-key` fixtures in the test suite. A scan that always fails is a scan
+everyone learns to ignore.
 
 - [ ] **Step 5: Commit**
 
@@ -3655,7 +3660,7 @@ Run before calling the feature done:
 
 Before making the repository public:
 
-- [ ] `grep -ri "sk-ant" . --exclude-dir=.git` returns nothing
+- [ ] `git grep -I "sk-ant-api" -- ':!docs/**'` returns nothing
 - [ ] `git check-ignore -v Signing.xcconfig` confirms it is ignored
 - [ ] `git log --all --stat | grep -i "Signing.xcconfig$"` returns nothing — if the
       real config was ever committed, rewriting history is required, not just deleting the file
