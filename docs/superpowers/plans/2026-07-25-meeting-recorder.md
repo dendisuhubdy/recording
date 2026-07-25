@@ -1233,29 +1233,35 @@ public struct ClaudeSummarizer: Summarizer {
         from the Q3 roadmap" over "Q3 roadmap discussion".
         """
 
-    static let responseSchema: [String: Any] = [
-        "type": "object",
-        "properties": [
-            "title": ["type": "string"],
-            "summary": ["type": "string"],
-            "decisions": ["type": "array", "items": ["type": "string"]],
-            "action_items": [
-                "type": "array",
-                "items": [
-                    "type": "object",
-                    "properties": [
-                        "owner": ["type": "string"],
-                        "task": ["type": "string"],
+    /// Computed rather than a `static let`: a stored `[String: Any]` is not
+    /// Sendable, so Swift 6 treats it as mutable global state and rejects it.
+    /// This is a literal built once per request — the cost is irrelevant next
+    /// to the network call it describes.
+    static var responseSchema: [String: Any] {
+        [
+            "type": "object",
+            "properties": [
+                "title": ["type": "string"],
+                "summary": ["type": "string"],
+                "decisions": ["type": "array", "items": ["type": "string"]],
+                "action_items": [
+                    "type": "array",
+                    "items": [
+                        "type": "object",
+                        "properties": [
+                            "owner": ["type": "string"],
+                            "task": ["type": "string"],
+                        ],
+                        "required": ["owner", "task"],
+                        "additionalProperties": false,
                     ],
-                    "required": ["owner", "task"],
-                    "additionalProperties": false,
                 ],
+                "open_questions": ["type": "array", "items": ["type": "string"]],
             ],
-            "open_questions": ["type": "array", "items": ["type": "string"]],
-        ],
-        "required": ["title", "summary", "decisions", "action_items", "open_questions"],
-        "additionalProperties": false,
-    ]
+            "required": ["title", "summary", "decisions", "action_items", "open_questions"],
+            "additionalProperties": false,
+        ]
+    }
 
     public func makeRequest(for transcript: Transcript) throws -> URLRequest {
         guard !apiKey.isEmpty else { throw SummarizerError.missingAPIKey }
