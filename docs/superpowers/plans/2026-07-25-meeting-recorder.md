@@ -23,11 +23,21 @@ Every task's requirements implicitly include this section.
 - **The API key is only ever read from and written to the Keychain.** It must never appear in `meta.json`, `summary.md`, a log line, an error message, or a commit.
 - **Audio is sacred.** No code path deletes or overwrites `mic.caf`, `system.caf`, or `mixed.m4a` on failure.
 - **Storage root:** `~/Library/Application Support/MeetingRecorder/Meetings/<uuid>/`.
+- **Bundle identifier:** `xyz.summly.MeetingRecorder`. Target and product name stay `MeetingRecorder`.
+- **License:** GPL-3.0. Every source file is covered by the repository LICENSE; do not add per-file headers.
+- **This is a public repository.** Nothing secret may be committed — no API keys, no Team ID, no notarization credentials, no `.env`. Signing configuration lives in an untracked xcconfig (Task 14).
 - **Commit after every task**, using the message given in that task's final step.
 
 ## File Structure
 
 ```
+.gitignore                                    # Xcode + SPM noise
+LICENSE                                       # GPL-3.0
+README.md                                     # what it is, privacy disclosure, build + setup
+Signing.xcconfig.template                     # committed template
+Signing.xcconfig                              # UNTRACKED — real Team ID lives here
+scripts/release.sh                            # build, sign, notarize, staple, package DMG
+
 MeetingCore/                                  # SPM package — CLI-testable, no app bundle needed
   Package.swift
   Sources/MeetingCore/
@@ -70,6 +80,175 @@ MeetingRecorder/                              # Xcode app target
 ```
 
 **Note on SwiftData:** the spec calls for a SwiftData index alongside `meta.json`, with `meta.json` authoritative. Task 10 implements exactly that. Worth knowing while building: for a personal tool, scanning a few hundred meeting folders at launch is instant, so the index is a convenience rather than a necessity. If it proves to be friction during Task 10, dropping it and reading folders directly is a defensible simplification — raise it rather than working around it silently.
+
+---
+
+### Task 0: Repository hygiene for a public repo
+
+Do this first. Once an Xcode project exists (Task 8), an absent `.gitignore`
+means `xcuserdata` churn in every commit, and it is easier to never commit that
+noise than to scrub it later.
+
+**Files:**
+- Create: `.gitignore`
+- Create: `LICENSE`
+- Create: `README.md`
+
+**Interfaces:**
+- Consumes: nothing
+- Produces: nothing consumed by later tasks
+
+- [ ] **Step 1: Write the .gitignore**
+
+Create `.gitignore`:
+
+```gitignore
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Signing — never commit the real Team ID or credentials
+Signing.xcconfig
+
+# Release artifacts
+dist/
+*.dmg
+```
+
+- [ ] **Step 2: Add the GPL-3.0 license**
+
+Download the canonical text rather than typing it — the license is only valid verbatim:
+
+```bash
+curl -fsSL https://www.gnu.org/licenses/gpl-3.0.txt -o LICENSE
+```
+
+Verify it downloaded correctly:
+
+```bash
+head -1 LICENSE && wc -l LICENSE
+```
+
+Expected: `                    GNU GENERAL PUBLIC LICENSE` and roughly 674 lines. If the file is short or contains HTML, the download failed — do not commit it.
+
+- [ ] **Step 3: Write the README**
+
+The privacy disclosure is a spec requirement, not decoration. It goes above the fold — before installation, before features.
+
+Create `README.md`:
+
+````markdown
+# Meeting Recorder
+
+A macOS app with one red button. It records your meeting — your microphone and
+the other participants' audio — transcribes it on your Mac, and summarizes it
+with Claude.
+
+## What leaves your computer
+
+Be clear on this before you record anyone.
+
+| Data | Where it goes |
+|---|---|
+| **Meeting audio** | Never leaves your Mac. Transcription runs entirely on-device. |
+| **Transcript text** | **Sent to the Anthropic API** to generate the summary, using your own API key. A transcript contains everything everyone said in the meeting. |
+| **Your API key** | Stored in your macOS Keychain. Nowhere else. |
+
+There is no backend, no account, no telemetry, and no analytics. This app talks
+to exactly one server — Anthropic's — and only to summarize a transcript.
+
+If you do not want transcripts sent anywhere, leave the API key blank. Recording
+and transcription work without it; you just will not get summaries.
+
+**Recording other people:** in many jurisdictions it is illegal to record a
+conversation without the consent of the people in it. This app does not check,
+warn, or enforce. That is your responsibility.
+
+## Requirements
+
+- macOS 26 or later
+- An [Anthropic API key](https://console.anthropic.com/) for summaries (optional)
+
+## Install
+
+Download the latest `.dmg` from [summly.xyz](https://summly.xyz), open it, and
+drag Meeting Recorder to Applications.
+
+The app is signed and notarized by Apple, so it opens normally — no
+right-click-Open workaround needed.
+
+## Setup
+
+1. Launch the app and press **⌘,** to open Settings.
+2. Paste your Anthropic API key and press **Save**. It goes to your Keychain.
+3. Press the red button. macOS will ask for **Microphone** and **Screen
+   Recording** permission the first time.
+
+Screen Recording permission is what lets the app capture the other
+participants' audio. It records audio only — no video is ever written to disk.
+
+## Build from source
+
+```bash
+git clone https://github.com/<owner>/recording.git
+cd recording
+swift test --package-path MeetingCore   # run the test suite
+open MeetingRecorder/MeetingRecorder.xcodeproj
+```
+
+Building for yourself needs no signing setup. Xcode's automatic signing is
+enough to run it locally.
+
+## How it works
+
+Recording writes microphone and system audio to two separate files and does no
+mixing while capture is running — the real-time path stays as simple as
+possible, because that is the one place a bug costs you the meeting. Everything
+after that (mixing, transcription, summarization) happens once you press stop,
+and each stage can be retried on its own without redoing the others.
+
+Your audio is never deleted automatically. A meeting whose summary failed is
+still a meeting with a full transcript.
+
+## License
+
+GPL-3.0. See [LICENSE](LICENSE).
+````
+
+Replace `<owner>` with the actual GitHub owner before committing.
+
+- [ ] **Step 4: Verify nothing secret is staged**
+
+```bash
+git status --short
+grep -ri "sk-ant" . --exclude-dir=.git || echo "clean"
+```
+
+Expected: only `.gitignore`, `LICENSE`, and `README.md` are new; the grep prints `clean`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add .gitignore LICENSE README.md
+git commit -m "chore: add GPL-3.0 license, gitignore, and README"
+```
 
 ---
 
@@ -3208,12 +3387,277 @@ git commit -m "feat: add meeting detail view, settings, and retry"
 
 ---
 
+### Task 14: Signing, notarization, and DMG release
+
+Run this only once Task 13's end-to-end check passes — there is no point
+notarizing an app that does not work.
+
+**Files:**
+- Create: `Signing.xcconfig.template`
+- Create: `Signing.xcconfig` (untracked)
+- Create: `MeetingRecorder/MeetingRecorder.entitlements`
+- Create: `scripts/release.sh`
+- Modify: Xcode target build settings
+
+**Interfaces:**
+- Consumes: the working app from Task 13
+- Produces: a notarized, stapled `dist/MeetingRecorder.dmg`
+
+- [ ] **Step 1: Create the signing config template and your real config**
+
+Create `Signing.xcconfig.template` (committed):
+
+```
+// Copy to Signing.xcconfig and fill in your own values.
+// Signing.xcconfig is gitignored — never commit it.
+DEVELOPMENT_TEAM = XXXXXXXXXX
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = Developer ID Application
+PRODUCT_BUNDLE_IDENTIFIER = xyz.summly.MeetingRecorder
+```
+
+Create your real `Signing.xcconfig` from it:
+
+```bash
+cp Signing.xcconfig.template Signing.xcconfig
+```
+
+Find your Team ID and edit `DEVELOPMENT_TEAM` to match:
+
+```bash
+security find-identity -v -p codesigning
+```
+
+Expected output includes a line like
+`1) ABC123... "Developer ID Application: Your Name (TEAMID1234)"`. The
+parenthesised value is your Team ID. If no `Developer ID Application` identity
+is listed, create one in Xcode: **Settings → Accounts → Manage Certificates →
++ → Developer ID Application**.
+
+- [ ] **Step 2: Confirm the config file is ignored**
+
+```bash
+git status --short Signing.xcconfig
+git check-ignore -v Signing.xcconfig
+```
+
+Expected: `git status` prints nothing for it, and `check-ignore` confirms the
+`.gitignore` rule matched. **If `git status` lists it, stop and fix `.gitignore`
+before continuing** — this is the file that must never reach a public repo.
+
+- [ ] **Step 3: Apply the config in Xcode**
+
+- Drag `Signing.xcconfig` into the project navigator. In the add dialog,
+  **uncheck** "Copy items if needed" and **uncheck** all targets — a config
+  file is not a compiled source.
+- Select the **project** (not the target) → **Info** → **Configurations** →
+  set both **Debug** and **Release** to use `Signing` for the MeetingRecorder target.
+- Target → **General** → confirm **Bundle Identifier** now reads
+  `xyz.summly.MeetingRecorder`.
+
+- [ ] **Step 4: Enable the Hardened Runtime**
+
+Notarization is rejected without it.
+
+- Target → **Signing & Capabilities** → **+ Capability** → **Hardened Runtime**.
+- Under Hardened Runtime, tick **Audio Input**. Without it the signed build gets
+  microphone access denied at runtime even though the unsigned build worked.
+
+Verify Xcode wrote the entitlements file:
+
+```bash
+cat MeetingRecorder/MeetingRecorder.entitlements
+```
+
+Expected to contain `com.apple.security.device.audio-input` set to `<true/>`.
+
+- [ ] **Step 5: Store notarization credentials in the Keychain**
+
+Credentials go in your login Keychain, never in the repo. Create an
+app-specific password at [appleid.apple.com](https://appleid.apple.com) first.
+
+```bash
+xcrun notarytool store-credentials "MR_NOTARY" \
+  --apple-id "you@example.com" \
+  --team-id "$(grep DEVELOPMENT_TEAM Signing.xcconfig | tr -d ' ' | cut -d= -f2)" \
+  --password "your-app-specific-password"
+```
+
+Expected: `Success. Credentials saved.` The profile name `MR_NOTARY` is what
+`release.sh` refers to; the secret itself never appears in any tracked file.
+
+- [ ] **Step 6: Write the release script**
+
+Create `scripts/release.sh`:
+
+```bash
+#!/usr/bin/env bash
+# Build, sign, notarize, staple, and package Meeting Recorder for distribution.
+# Requires: Signing.xcconfig with a valid DEVELOPMENT_TEAM, and a notarytool
+# keychain profile named MR_NOTARY (see Task 14 Step 5).
+set -euo pipefail
+
+APP_NAME="MeetingRecorder"
+SCHEME="MeetingRecorder"
+PROJECT="MeetingRecorder/MeetingRecorder.xcodeproj"
+NOTARY_PROFILE="MR_NOTARY"
+BUILD_DIR="build"
+DIST_DIR="dist"
+
+if [[ ! -f Signing.xcconfig ]]; then
+  echo "error: Signing.xcconfig not found. Copy Signing.xcconfig.template and fill it in." >&2
+  exit 1
+fi
+
+TEAM_ID="$(grep DEVELOPMENT_TEAM Signing.xcconfig | tr -d ' ' | cut -d= -f2)"
+if [[ -z "$TEAM_ID" || "$TEAM_ID" == "XXXXXXXXXX" ]]; then
+  echo "error: set a real DEVELOPMENT_TEAM in Signing.xcconfig." >&2
+  exit 1
+fi
+
+rm -rf "$BUILD_DIR" "$DIST_DIR"
+mkdir -p "$DIST_DIR"
+
+echo "==> Running package tests"
+swift test --package-path MeetingCore
+
+echo "==> Archiving"
+xcodebuild archive \
+  -project "$PROJECT" \
+  -scheme "$SCHEME" \
+  -configuration Release \
+  -archivePath "$BUILD_DIR/$APP_NAME.xcarchive" \
+  -xcconfig Signing.xcconfig \
+  CODE_SIGN_STYLE=Manual \
+  | xcbeautify || true
+
+# ExportOptions is generated, not committed — it embeds the Team ID.
+cat > "$BUILD_DIR/ExportOptions.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>method</key><string>developer-id</string>
+  <key>teamID</key><string>$TEAM_ID</string>
+  <key>signingStyle</key><string>manual</string>
+</dict>
+</plist>
+PLIST
+
+echo "==> Exporting"
+xcodebuild -exportArchive \
+  -archivePath "$BUILD_DIR/$APP_NAME.xcarchive" \
+  -exportOptionsPlist "$BUILD_DIR/ExportOptions.plist" \
+  -exportPath "$DIST_DIR"
+
+echo "==> Submitting for notarization (this takes a few minutes)"
+ditto -c -k --keepParent "$DIST_DIR/$APP_NAME.app" "$BUILD_DIR/$APP_NAME.zip"
+xcrun notarytool submit "$BUILD_DIR/$APP_NAME.zip" \
+  --keychain-profile "$NOTARY_PROFILE" --wait
+
+echo "==> Stapling the app"
+xcrun stapler staple "$DIST_DIR/$APP_NAME.app"
+
+echo "==> Building the DMG"
+hdiutil create -volname "$APP_NAME" \
+  -srcfolder "$DIST_DIR/$APP_NAME.app" \
+  -ov -format UDZO "$DIST_DIR/$APP_NAME.dmg"
+
+# The DMG is a separate distributable and needs its own notarization pass,
+# otherwise Gatekeeper flags the disk image even though the app inside is clean.
+echo "==> Notarizing the DMG"
+xcrun notarytool submit "$DIST_DIR/$APP_NAME.dmg" \
+  --keychain-profile "$NOTARY_PROFILE" --wait
+xcrun stapler staple "$DIST_DIR/$APP_NAME.dmg"
+
+echo "==> Verifying"
+spctl -a -vvv -t install "$DIST_DIR/$APP_NAME.app"
+xcrun stapler validate "$DIST_DIR/$APP_NAME.dmg"
+
+echo
+echo "Done: $DIST_DIR/$APP_NAME.dmg"
+```
+
+Make it executable:
+
+```bash
+chmod +x scripts/release.sh
+```
+
+`xcbeautify` is optional prettification; the `|| true` keeps the build working
+without it. Install with `brew install xcbeautify` if you want readable output.
+
+- [ ] **Step 7: Run a release build**
+
+```bash
+./scripts/release.sh
+```
+
+Expected, in order: tests pass, archive succeeds, notarytool reports
+`status: Accepted`, stapling succeeds, and the final `spctl` prints
+`source=Notarized Developer ID` with `accepted`.
+
+If notarytool reports `Invalid`, read the actual reason rather than guessing:
+
+```bash
+xcrun notarytool log <submission-id> --keychain-profile MR_NOTARY
+```
+
+The two common causes are a missing Hardened Runtime (Step 4) and a nested
+binary signed with the wrong identity.
+
+- [ ] **Step 8: Verify the DMG on a clean machine path**
+
+Gatekeeper caches assessments for paths it has already seen, so testing in
+place can produce a false pass:
+
+```bash
+xattr -w com.apple.quarantine "0081;00000000;Safari;" dist/MeetingRecorder.dmg
+open dist/MeetingRecorder.dmg
+```
+
+- [ ] The DMG mounts with no warning dialog.
+- [ ] Dragging the app to Applications and launching it shows no "unidentified
+      developer" or "damaged" warning.
+- [ ] Recording still works in the signed build — this is what Step 4's Audio
+      Input entitlement is for. Run the microphone portion of
+      `MeetingRecorder/docs/manual-smoke-test.md` against the installed copy.
+
+- [ ] **Step 9: Confirm the repo is still clean**
+
+```bash
+git status --short
+git check-ignore -v Signing.xcconfig dist build
+```
+
+Expected: no `Signing.xcconfig`, no `dist/`, no `build/`, no `.dmg` in
+`git status`.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add Signing.xcconfig.template scripts/release.sh \
+        MeetingRecorder/MeetingRecorder.entitlements
+git commit -m "build: add Developer ID signing, notarization, and DMG packaging"
+```
+
+---
+
 ## Verification checklist
 
 Run before calling the feature done:
 
-- [ ] `cd MeetingCore && swift test` — 35 tests pass
+- [ ] `cd MeetingCore && swift test` — 36 tests pass
 - [ ] `MeetingRecorder/docs/manual-smoke-test.md` — every box ticked
 - [ ] Task 13 Step 3 end-to-end check — every box ticked
+- [ ] Task 14 Step 8 signed-DMG check — every box ticked
 - [ ] `git log --oneline` shows one commit per task
-- [ ] `grep -ri "sk-ant" --include="*.swift" --include="*.json" --include="*.md" .` returns nothing
+
+Before making the repository public:
+
+- [ ] `grep -ri "sk-ant" . --exclude-dir=.git` returns nothing
+- [ ] `git check-ignore -v Signing.xcconfig` confirms it is ignored
+- [ ] `git log --all --stat | grep -i "Signing.xcconfig$"` returns nothing — if the
+      real config was ever committed, rewriting history is required, not just deleting the file
+- [ ] `README.md` states the transcript disclosure above the fold
+- [ ] `LICENSE` is the verbatim GPL-3.0 text (~674 lines)

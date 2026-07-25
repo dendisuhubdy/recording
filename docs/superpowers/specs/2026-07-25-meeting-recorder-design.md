@@ -10,7 +10,14 @@ the other participants' audio together — then transcribes it on-device and
 summarizes it with the Claude API. Past meetings live in an in-app library with
 their transcript and summary.
 
-Personal tool, run from Xcode. Not sandboxed, not notarized, not shipped.
+Open source under GPL-3.0, distributed as a notarized `.app` from summly.xyz.
+Not sandboxed.
+
+> **Amended 2026-07-25, after initial approval.** This project was originally
+> scoped as a personal tool run from Xcode, with distribution and notarization
+> listed as non-goals. It is now shipping publicly. The Distribution row in the
+> decisions table and the non-goals list below reflect the amendment; the
+> architecture, pipeline, and testing sections are unchanged by it.
 
 ## Environment
 
@@ -34,7 +41,8 @@ future reader knows the choice was made rather than defaulted into.
 | Transcription timing | After stop, from the saved file | Live streaming (couples recording to the speech engine) |
 | Speaker labels | None — one flat transcript | Channel-based "me vs them" (deferred); full diarization (out of scope) |
 | App surface | Menu bar + main window | Window-only; menu-bar-only |
-| Distribution | Run from Xcode, personal use | Signed `.app`; App Store |
+| Distribution | Developer ID signed + notarized `.app`, downloaded from summly.xyz | App Store (would force sandboxing, which breaks the storage layout); source-only distribution |
+| License | GPL-3.0 | MIT / Apache-2.0 — permissive licenses would let a closed fork ship without giving changes back |
 
 ### Why mixing happens offline
 
@@ -253,5 +261,29 @@ Stated explicitly so the implementation plan does not quietly absorb them:
 - Transcript editing
 - Calendar integration or automatic meeting detection
 - Cloud sync or multi-device support
-- Code signing, notarization, or distribution
-- Sandboxing
+- Sandboxing (incompatible with the documented storage layout; also rules out
+  the App Store, which is an accepted consequence)
+- A hosted backend of any kind. The app talks to the Claude API directly with
+  the user's own key; there is no server that sees user data.
+- Auto-update. Users re-download from summly.xyz.
+
+## Privacy
+
+This matters more now that the app is public, and it must be stated plainly in
+the README rather than implied.
+
+| Data | Where it goes |
+|---|---|
+| Meeting audio (`mic.caf`, `system.caf`, `mixed.m4a`) | Never leaves the machine. Transcription is fully on-device. |
+| Transcript text | **Sent to the Anthropic API** for summarization, using the user's own API key. A meeting transcript contains everything everyone said. |
+| Claude API key | macOS Keychain only. |
+| Anything else | There is no backend, no telemetry, no analytics, and no crash reporting. |
+
+Two consequences follow, and both are requirements rather than nice-to-haves:
+
+1. The README states the transcript disclosure in plain language, above the
+   fold — not buried in a privacy section at the bottom.
+2. Because other people are recorded too, the README notes that recording
+   participants without telling them is illegal in some jurisdictions. The app
+   does not attempt to enforce this; it just does not pretend the issue is
+   absent.
