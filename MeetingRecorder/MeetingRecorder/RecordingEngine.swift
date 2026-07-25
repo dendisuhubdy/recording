@@ -83,10 +83,10 @@ final class RecordingEngine: NSObject {
         self.stream = stream
         startedAt = Date()
         isRecording = true
+        let began = Date()
         ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self, let startedAt = self.startedAt else { return }
-                self.elapsed = Date().timeIntervalSince(startedAt)
+            Task { @MainActor [weak self] in
+                self?.elapsed = Date().timeIntervalSince(began)
             }
         }
     }

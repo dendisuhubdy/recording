@@ -19,10 +19,11 @@ final class AppModel {
     @ObservationIgnored private var currentMeetingID: UUID?
     @ObservationIgnored private var tickTask: Task<Void, Never>?
 
-    init(
-        store: MeetingStore = MeetingStore(root: .defaultRootCreatingIfNeeded()),
-        modelContext: ModelContext
-    ) {
+    init(store: MeetingStore? = nil, modelContext: ModelContext) {
+        // Resolved inside the initializer rather than as a default argument:
+        // default arguments evaluate in a nonisolated context, and creating the
+        // storage directory is MainActor work.
+        let store = store ?? MeetingStore(root: .defaultRootCreatingIfNeeded())
         self.store = store
         self.engine = RecordingEngine(store: store)
         self.library = MeetingLibrary(store: store, modelContext: modelContext)
