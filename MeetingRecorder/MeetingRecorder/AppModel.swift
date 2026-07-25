@@ -14,6 +14,7 @@ final class AppModel {
 
     let store: MeetingStore
     let library: MeetingLibrary
+    let player = AudioPlayerController()
 
     @ObservationIgnored private let engine: RecordingEngine
     @ObservationIgnored private var currentMeetingID: UUID?
@@ -51,6 +52,12 @@ final class AppModel {
     }
 
     private func startRecording() async {
+        // Before the permission checks, not after: a denied permission would
+        // otherwise leave a meeting playing underneath the permission sheet.
+        // Capturing system audio while replaying one would also fold the old
+        // meeting into the new recording.
+        player.stop()
+
         if PermissionChecker.microphoneStatus() != .granted,
             await PermissionChecker.requestMicrophone() == false
         {

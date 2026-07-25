@@ -9,11 +9,16 @@ struct MeetingDetailView: View {
     @State private var summaryMarkdown: String = ""
     @State private var transcript: Transcript?
     @State private var isRetrying = false
+    @State private var track: PlaybackTrack?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+
+                if let track {
+                    PlayerBar(track: track, player: model.player)
+                }
 
                 if meeting.stage == .failed {
                     failureBanner
@@ -101,6 +106,15 @@ struct MeetingDetailView: View {
 
     private func load() {
         let store = model.store
+
+        // Stop first: switching meetings must never leave the player showing
+        // another meeting's position.
+        model.player.stop()
+        track = store.playbackTrack(for: meeting.id)
+        if let track {
+            model.player.load(meetingID: meeting.id, track: track)
+        }
+
         summaryMarkdown =
             (try? String(
                 contentsOf: store.summaryURL(for: meeting.id),
